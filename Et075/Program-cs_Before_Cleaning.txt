@@ -1,0 +1,480 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Et075
+{
+    public static class Constants
+    {
+        public const int ETS_ON_SHEET = 16;
+        //public const int MIN_RUN = 500;
+        public const int RUN_ROUNDER = 1000;
+        public const int RUN_DELTA = 300;
+    }
+
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            Console.WriteLine("Et075");
+            List<Etyketka> ets1 = new List<Etyketka> {
+                new Etyketka(1, 1500), new Etyketka(2, 2600), 
+                new Etyketka(3, 8000), new Etyketka(4, 10000), 
+                new Etyketka(5, 1500), new Etyketka(6, 4800) };
+            List<Etyketka> ets2 = new List<Etyketka> {
+                new Etyketka(1, 2000), new Etyketka(2, 2000), 
+                new Etyketka(3, 4000), new Etyketka(4, 4000), 
+                new Etyketka(5, 4000) };
+
+            List<OutStats> results;
+            Console.WriteLine("1. Given data: ");
+            foreach (Etyketka et in ets1)
+                Console.Write("{0} ", et.Run);
+            Console.WriteLine();
+            results = FirstPass(ets1);
+            foreach (var r in results)
+                Console.WriteLine(r);
+
+            Console.WriteLine("\n2. Given data: ");
+            foreach (Etyketka et in ets2)
+                Console.Write("{0} ", et.Run);
+            Console.WriteLine();
+            results = FirstPass(ets2);
+            foreach (var r in results)
+                Console.WriteLine(r);
+            //Console.WriteLine("Given data: ");
+            //foreach (Etyketka et in ets1)
+            //    Console.Write("{0} ", et.Run);
+            //Console.WriteLine();
+            //int ets1run = DetermineRun(from e in ets1 select e.Run);
+            //int ets1onsheet = GetStatsForRun(ets1, ets1run);
+            //Console.WriteLine("Run {0}, count on sheet {1}", ets1run, ets1onsheet);
+
+            //Console.WriteLine("Given data: ");
+            //foreach (Etyketka et in ets2)
+            //    Console.Write("{0} ", et.Run);
+            //Console.WriteLine();
+            //int ets2run = DetermineRun(from e in ets2 select e.Run);
+            //int ets2onsheet = GetStatsForRun(ets2, ets2run);
+            //Console.WriteLine("Run {0}, count on sheet {1}", ets2run, ets2onsheet);
+
+            //Console.WriteLine("\nApplying method 1.");
+            //OutStat os = Method1(ref ets);
+            //Console.WriteLine("Naklad {0}, remains sum {1}, et sum {2}", 
+            //    os.Naklad, os.Remains, os.Ets);
+            //Console.WriteLine("\tRun\tOnSheet\tRemains");
+            //foreach (Etyketka et in ets)
+            //{
+            //    Console.WriteLine("\t{0}\t{1}\t{2}", et.Run, et.CountOnSheet, et.Remains);
+            //}
+
+
+            Console.ReadKey();
+        }//end:Main
+
+        private static void Analyze(List<Etyketka> ets)
+        {
+            Console.WriteLine("\n2. Given data: ");
+            foreach (Etyketka et in ets)
+                Console.Write("{0} ", et.Run);
+            Console.WriteLine();
+            List<OutStats> results = FirstPass(ets);
+            foreach (var r in results)
+                Console.WriteLine(r);
+        }
+
+        /// <summary>
+        /// Returns the greatest common divisor of a and b
+        /// </summary>
+        private static int GCD(int a, int b)
+        {
+            return b == 0 ? a : GCD(b, a % b);
+        }//end:GCD
+
+        /// <summary>
+        ///If two runs differs not more then by runDelta, then increase the smaller run to match the bigger one.
+        ///The difference while increasing is added to et remains
+        /// </summary>
+        //private static List<Etyketka> NormalizeRuns(List<Etyketka> ets)
+        //{
+        //    Etyketka[] sortedEts = (from e in ets orderby e.Run select e).ToArray();
+        //    for (int i = sortedEts.Length - 2; i >= 0; i--)
+        //    {
+        //        int diff = sortedEts[i + 1].Run - sortedEts[i].Run;
+        //        if (diff < 0)
+        //            throw new InvalidOperationException("Something went wrong here!");
+        //        if (diff < Constants.RUN_DELTA)
+        //        {
+        //            sortedEts[i].Remains = diff;
+        //            sortedEts[i].Run = sortedEts[i + 1].Run;
+        //        }
+        //    }//for
+        //    return sortedEts.ToList();
+        //}//end:NormalizeRuns
+
+        //private static int DetermineRun(IEnumerable<int> runs)
+        //{
+        //    //IEnumerable<int> roundedRuns = from r in runs
+        //    //                               select r + (Constants.RUN_ROUNDER - (r % Constants.RUN_ROUNDER));
+        //    int result;
+        //    result = runs.Aggregate(GCD);
+        //    //if (result >= runs.Min())
+        //    //    return result;
+        //    //result = runs.Min();
+        //    return result;
+        //}//end:DetermineRun
+
+        /// <summary>
+        /// Returns outs stats for provided ets list with provided run.
+        /// </summary>
+        private static OutStats GetStatsForRun(ref List<Etyketka> ets, int run)
+        {
+            foreach (Etyketka et in ets)
+            {
+                int diff = et.Run - run;
+                if (diff > 0)
+                {
+                    et.CountOnSheet = et.Run / run;
+                    et.Overprint = (et.Run % run); //Get the remains
+                }
+                else
+                {
+                    et.CountOnSheet = 1;
+                    et.Overprint = (run - et.Run);
+                    if (et.Overprint < 0)
+                        throw new ArgumentOutOfRangeException("Something went wrong in this 'else' clause!");
+                }
+            }//foreach
+            OutStats result = new OutStats();
+            result.EtsOnSheetCount = (from e in ets select e.CountOnSheet).Sum();
+            result.OverprintsSum = (from e in ets select e.Overprint).Sum();
+            result.Run = run;
+            return result;
+        }//ens:GetEtsOnSheetForRun
+
+        /// <summary>
+        /// Selects minimal appropriate run for given ets list
+        /// </summary>
+        private static int GetMinimalRun(List<Etyketka> ets)
+        {
+            //int minRun = DetermineRun(from e in ets select e.Run);
+            //if (minRun < MIN_RUN)
+            //    minRun = (from e in ets select e.Run).Min();
+            //if (minRun < MIN_RUN)
+            //    minRun = MIN_RUN;
+            //return minRun;
+            //return DetermineRun(from e in ets select e.Run);
+            return (from e in ets select e.Run).Min();
+        }//end:GetMinimalRun
+
+
+        /// <summary>
+        /// Tries to process provided list of ets simply.
+        /// If fails, Split would be called.
+        /// Returns outstats list.
+        /// </summary>
+        private static List<OutStats> FirstPass(List<Etyketka> ets)
+        {
+            // If number of ets <= Constants.ETS_ON_SHEET, apply FirstPass, else apply Split
+            if (ets.Count > Constants.ETS_ON_SHEET)
+                return Split2(ets);
+            // Select minimal run. If it is < MIN_RUN, then select MIN_RUN
+            int minRun = GetMinimalRun(ets);
+            // With selected run determine the ets on the sheet sum
+            List<Etyketka> tmpEts = (from e in ets select e).ToList();
+            OutStats tmpStats = GetStatsForRun(ref tmpEts, minRun);
+            // If etsOnSheetSum == Constants.ETS_ON_SHEET return succesful stats
+            if (tmpStats.EtsOnSheetCount == Constants.ETS_ON_SHEET)
+                return new List<OutStats>() { tmpStats };
+            // If etsOnSheetSum < Constants.ETS_ON_SHEET, then decrease the run (even it it is the MIN_RUN)
+            if (tmpStats.EtsOnSheetCount < Constants.ETS_ON_SHEET)
+                return new List<OutStats>() { DecreaseRun2(ets, minRun) };
+            // If etsOnSheetSum > Constants.ETS_ON_SHEET and < 2*Constants.ETS_ON_SHEET, then incrase run
+            List<OutStats> drStats = new List<OutStats>() { DecreaseRun2(ets, (from e in ets select e.Run).Max()) };
+            // If etsOnSheetSum >= 2*Constants.ETS_ON_SHEET apply Split
+            List<OutStats> splitStats = Split2(ets);
+            int drRemains = (from s in drStats select s.OverprintsSum).Sum()
+                + (2000 * drStats.Count - 1);
+            int splitRemains = (from s in splitStats select s.OverprintsSum).Sum()
+                + (2000 * splitStats.Count - 1);
+            if (splitRemains < drRemains)
+                return splitStats;
+            else
+                return drStats;
+        }//end:FirstPass
+
+        ///<summary>
+        ///Splits provided list of ets and applies FirstPass on each sublist.
+        ///Collects OutStats from each FirstPass and returns them as single list.
+        ///</summary>
+        private static List<OutStats> Split2(List<Etyketka> ets)
+        {
+            List<OutStats> TheBestResult = null;
+            int BestOverprintsSummary = int.MaxValue;
+            List<List<Etyketka>> Groups;
+            //Order ets by runs
+            List<Etyketka> etsSortedByRun = (from e in ets orderby e.Run select e).ToList();
+            //Select minimal run. If it is < MIN_RUN, then select MIN_RUN
+            int currentRun = GetMinimalRun(ets);
+            int MaxRun = (from e in ets select e.Run).Max();
+
+            do
+            {
+                //With selected run determine the count on the sheet for each et
+                GetStatsForRun(ref etsSortedByRun, currentRun);
+                //Create the first ets group with the sum count on the sheet <= Constants.ETS_ON_SHEET
+                Groups = new List<List<Etyketka>>();
+                List<Etyketka> Group = new List<Etyketka>();
+                int count = 0;
+                foreach (Etyketka et in etsSortedByRun)
+                {
+                    if (count + et.CountOnSheet <= Constants.ETS_ON_SHEET)
+                    {
+                        count += et.CountOnSheet;
+                        Group.Add(et);
+                    }//if
+                    else
+                    {
+                        //Create the second group of ets from the remained ets
+                        Groups.Add(Group);
+                        Group = new List<Etyketka>() { et };
+                        count = et.CountOnSheet;
+                    }//else
+                }//foreach
+                Groups.Add(Group);
+
+                int OverprintsSummary = -2000;
+                List<OutStats> tmpResult = new List<OutStats>();
+                foreach (var eg in Groups)
+                {
+                    OverprintsSummary += 2000; //The cost of each new imposition
+                    OutStats os = null;
+                    List<Etyketka> tmpEg = (from e in eg select e).ToList();
+                    if ((from e in eg select e.CountOnSheet).Sum() < Constants.ETS_ON_SHEET)
+                        os = DecreaseRun2(eg, currentRun);
+                    else
+                        os = GetStatsForRun(ref tmpEg, currentRun);
+                    OverprintsSummary += os.OverprintsSum
+                        + (Constants.ETS_ON_SHEET - os.EtsOnSheetCount) * os.Run;
+
+                    tmpResult.Add(os);
+                }//foreach
+                if (BestOverprintsSummary > OverprintsSummary)
+                {
+                    TheBestResult = tmpResult;
+                    BestOverprintsSummary = OverprintsSummary;
+                }
+
+                //foreach (var s in TheBestResult)
+                //    Console.WriteLine("\t {3} Intermediate results: r {0}, ovp {1}, eosc {2}", s.Run, s.OverprintsSum, s.EtsOnSheetCount, currentRun);
+                //Console.WriteLine();
+
+                currentRun += 100;
+            } while (currentRun <= MaxRun);
+            return TheBestResult;
+        }//end:Split2
+
+        /// <summary>
+        /// Splits provided list of ets and applies FirstPass on each sublist.
+        /// Collects OutStats from each FirstPass and returns them as single list.
+        /// </summary>
+        //private static List<OutStat> Split(List<Etyketka> ets)
+        //{
+        //    //Order ets by runs
+        //    List<Etyketka> etsSortedByRun = (from e in ets orderby e.Run select e).ToList();
+        //    //Select minimal run. If it is < MIN_RUN, then select MIN_RUN
+        //    int minRun = GetMinimalRun(ets);
+        //    //With selected run determine the count on the sheet for each et
+        //    GetStatsForRun(ref etsSortedByRun, minRun);
+        //    //Create the first ets group with the sum count on the sheet <= Constants.ETS_ON_SHEET
+        //    #region Remake1
+        //    //TODO. Extract exactly Constants.ETS_ON_SHEET ets into the first group
+        //    IEnumerator<Etyketka> et = etsSortedByRun.GetEnumerator();
+        //    int count = 0;
+        //    List<Etyketka> Part1 = new List<Etyketka>();
+        //    List<Etyketka> Part2 = new List<Etyketka>();
+        //    while (et.MoveNext())
+        //    {
+        //        if (count + et.Current.CountOnSheet <= Constants.ETS_ON_SHEET)
+        //        {
+        //            count += et.Current.CountOnSheet;
+        //            Part1.Add(et.Current);
+        //        }//if
+        //        else
+        //        {
+        //            //Create the second group of ets from the remained ets
+        //            Part2.Add(et.Current);
+        //        }//else
+        //    }//while
+        //    #endregion
+        //    List<OutStat> result = new List<OutStat>();
+        //    //Apply FirstPass to the first group
+        //    result.AddRange(FirstPass(Part1));
+        //    //Apply FirstPass to the second group
+        //    result.AddRange(FirstPass(Part2));
+        //    return result;
+        //}//end:Split
+
+        //private static List<OutStat> Split2(List<Etyketka> ets)
+        //{
+
+        //    //Group ets by runs
+        //    var etsGroupedByRun = from e in NormalizeRuns(ets) group e by e.Run;
+        //    //Extract groups with TKey % Constants.ETS_ON_SHEET == 0
+        //    List<Etyketka> Part1 = new List<Etyketka>();
+        //    List<Etyketka> Part2 = new List<Etyketka>();
+        //    foreach (var e in etsGroupedByRun)
+        //    {
+        //        if ((e.Key < Constants.ETS_ON_SHEET && (Constants.ETS_ON_SHEET % e.Key == 0))
+        //            || (e.Key >= Constants.ETS_ON_SHEET) && (e.Key % Constants.ETS_ON_SHEET == 0))
+        //        {
+
+        //        }
+        //    }
+        //    //Try to fit extracted groups on sheet(s) with minimum remains
+        //    //Try to merge remained groups
+
+        //    //Select ets group with similar runs
+
+        //    //Extract Constants.ETS_ON_SHEET from selected group
+
+        //    //Return OutStat for selected group
+        //    List<OutStat> result = new List<OutStat>();
+        //    //For other ets call FirstPass
+        //    result.AddRange(FirstPass(Part2));
+        //    return result;
+        //}//end:Split2
+
+        /// <summary>
+        /// Tries to decrease the run so, that all ets fit at the single sheet
+        /// Example. Given ets[2000, 2000, 12000] and run[2000]. run becomes 1000.
+        /// [3000, 5000] [1000] [500]
+        /// </summary>
+        //private static List<OutStat> DecreaseRun(List<Etyketka> ets, int run)
+        //{
+        //    List<Etyketka> tmpEts;
+        //    int etsOnSheetSum;
+        //    //Get the etsOnSheetSum for the run
+        //    tmpEts = ets.ToList();
+        //    OutStat stats = GetStatsForRun(ref tmpEts, run);
+        //    etsOnSheetSum = stats.Ets;
+        //    //If (Constants.ETS_ON_SHEET % etsOnSheetSum == 0)
+        //    if (Constants.ETS_ON_SHEET % etsOnSheetSum == 0)
+        //    {
+        //        //Increase the run
+        //        int newRun = Constants.ETS_ON_SHEET / etsOnSheetSum;
+        //        //Recalculate OutStat and return it
+        //        tmpEts = ets.ToList();
+        //        return new List<OutStat>() { GetStatsForRun(ref tmpEts, newRun) };
+        //    }
+        //    //Else find et with smallest etsOnSheet count
+        //    Etyketka et = tmpEts.Aggregate((Etyketka e1, Etyketka e2) =>
+        //        e1.CountOnSheet <= e2.CountOnSheet ? e1 : e2);
+        //    //Fit the run so, that etsOnSheet count for the et increased by 1
+        //    int newRun2 = et.Run / (et.CountOnSheet+1);
+        //    //Get the etsOnSheetSum for newRun
+        //    tmpEts = ets.ToList();
+        //    etsOnSheetSum = GetStatsForRun(ref tmpEts, newRun2).Ets;
+        //    //If (etsOnSheetSum > Constants.ETS_ON_SHEET) for the newRun, run cannot be decreased.
+        //    if (etsOnSheetSum > Constants.ETS_ON_SHEET)
+        //    {
+        //        //Calculate OutStats for old run and return
+        //        return new List<OutStat>() { stats };
+        //    }
+        //    //Else recursively call DecreaseRun with ets and newRun
+        //    else
+        //    {
+        //        return DecreaseRun(ets, newRun2);
+        //    }
+        //}//end:DecreaseRun
+
+        private static OutStats DecreaseRun2(List<Etyketka> ets, int run)
+        {
+            List<Etyketka> tmpEts;
+            int etsOnSheetSum;
+            //Get the etsOnSheetSum for the run
+            tmpEts = (from e in ets select e).ToList();
+            OutStats stats = GetStatsForRun(ref tmpEts, run);
+            etsOnSheetSum = stats.EtsOnSheetCount;
+            if (etsOnSheetSum > Constants.ETS_ON_SHEET)
+            {
+                throw new InvalidOperationException("The run can't be decreased!");
+            }
+            //If (Constants.ETS_ON_SHEET % etsOnSheetSum == 0)
+            if (Constants.ETS_ON_SHEET % etsOnSheetSum == 0)
+            {
+                //Increase the run
+                int newRun = run * (Constants.ETS_ON_SHEET / etsOnSheetSum);
+                //Recalculate OutStat and return it
+                tmpEts = (from e in ets select e).ToList();
+                return GetStatsForRun(ref tmpEts, newRun);
+            }
+            //Else find the run with the smallest remains
+            OutStats theBestStats = stats;
+            OutStats tmpStats;
+            foreach (Etyketka et in ets)
+            {
+                do
+                {
+                    //Fit the run so, that etsOnSheet count for the et increased by 1
+                    int newRun2 = et.Run / (et.CountOnSheet + 1);
+                    //Get the stats for the newRun
+                    tmpEts = (from e in ets select e).ToList();
+                    tmpStats = GetStatsForRun(ref tmpEts, newRun2);
+                    //Select the best stats.
+                    if (tmpStats.EtsOnSheetCount <= Constants.ETS_ON_SHEET
+                        && theBestStats.OverprintsSum + (theBestStats.Run * (Constants.ETS_ON_SHEET - theBestStats.EtsOnSheetCount))
+                        > tmpStats.OverprintsSum + (tmpStats.Run * (Constants.ETS_ON_SHEET - tmpStats.EtsOnSheetCount)))
+                        theBestStats = tmpStats;
+                } while (tmpStats.EtsOnSheetCount <= Constants.ETS_ON_SHEET);
+            }
+            return theBestStats;
+        }//end:DecreaseRun2
+
+        /// <summary>
+        /// Tries to increase the run so, that all ets fit at the single sheet
+        /// </summary>
+        //private static List<OutStat> IncreaseRun(List<Etyketka> ets, int run)
+        //{
+        //    List<Etyketka> tmpEts;
+        //    OutStat stats;
+        //    tmpEts = ets.ToList();
+        //    stats = GetStatsForRun(ref tmpEts, run);
+        //    //Find et with smallest etsOnSheet count greater than 1
+        //    Etyketka et = tmpEts.Aggregate((Etyketka e1, Etyketka e2) =>
+        //        e1.CountOnSheet <= e2.CountOnSheet && e1.CountOnSheet != 1 ? e1 : e2);
+        //    //Fit the run so, that etsOnSheet count for the et decreased by 1
+        //    int newRun = et.Run - et.Run / et.CountOnSheet; ;
+        //    //Get the etsOnSheetSum for newRun
+        //    tmpEts = ets.ToList();
+        //    stats = GetStatsForRun(ref tmpEts, newRun);
+        //    int etsOnSheetSum = stats.Ets;
+        //    //If (etsOnSheetSum == Constants.ETS_ON_SHEET) for the newRun, calculate OutStats and return.
+        //    if (etsOnSheetSum == Constants.ETS_ON_SHEET)
+        //    {
+        //        return new List<OutStat>() { stats };
+        //    }
+        //    //If (etsOnSheetSum > Constants.ETS_ON_SHEET) for the newRun, recursively call IncreaseRun with ets and new run.
+        //    if (etsOnSheetSum > Constants.ETS_ON_SHEET)
+        //    {
+        //        return IncreaseRun(ets, newRun);
+        //    }
+        //    //Else the run cannot be increased. Call Split with ets.
+        //    return Split(ets);
+        //}//end:IncreaseRun
+
+        //private static List<OutStat> IncreaseRun2(List<Etyketka> ets, int run)
+        //{
+        //    if (ets.Count > Constants.ETS_ON_SHEET)
+        //        throw new InvalidOperationException("Call split instead increase run!");
+        //    List<Etyketka> tmpEts;
+        //    OutStat stats;
+        //    tmpEts = ets.ToList();
+        //    stats = GetStatsForRun(ref tmpEts, run);
+        //    //For each et try to increase run until
+        //}//end:IncreaseRun2
+
+    }//end:class Program
+}
