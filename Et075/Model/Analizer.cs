@@ -19,34 +19,35 @@ namespace Et075.Model
             //Make given ets immutable
             Zakaz _ets = new Zakaz(ets);
 
+            StatsList result;
+
             // If number of ets > Constants.ETS_ON_SHEET apply Split
             if (_ets.Count > Constants.ETS_ON_SHEET)
-                return SplitFromMinToMax(_ets);
+            {
+                result = SplitFromMinToMax(_ets);
 
-            // Obtain stats for minimum acceptable run
-            int run = _ets.MinRun;
-            OutStats tmpStats = GetStatsForRun(_ets, run);
-            if (tmpStats.IsValid)
-            {
-                return new StatsList() { DecreaseRun(_ets, run) };
+                if (_ets.Count <= Constants.ETS_ON_SHEET * 2)
+                {
+                    StatsList tmpResult = TwoPartsRebalancer(_ets);
+                    if (tmpResult < result)
+                        result = tmpResult;
+                }
+
+                return result;
             }
+
             // If etsOnSheetSum > Constants.ETS_ON_SHEET, select the best stats from 2 options below
-            // At first. With max run from original ets set
-            // there can not be more than Constants.ETS_ON_SHEET ets on the sheet.
-            // So we apply Decrease run with max run to the ets
-            while (!tmpStats.IsValid)
-            {
-                run += 100; //Increase the run and the EtsOnSheetCount is decreased
-                tmpStats = GetStatsForRun(_ets, run);
-            }
-            StatsList drStats = new StatsList() { DecreaseRun(_ets, run) };
+            // At first. Obtain the stats for minimum acceptable run
+            result = new StatsList() { GetStatsForRun(_ets, GetMinValidRun(_ets)) };
             // At second. We try to split ets.
             StatsList splitStats = SplitFromMinToMax(_ets);
+            
             //Check which stats are the best and return them
-            if (splitStats < drStats)
-                return splitStats;
-            else
-                return drStats;
+            if (splitStats < result)
+            {
+                result = splitStats;
+            }
+            return result;
         }//end:FirstPass
 
         #endregion//CompletedMethods
@@ -336,12 +337,18 @@ namespace Et075.Model
 
             int runIncrement = 0;
             StatsList TheBestResult = null;
+            Zakaz zakazForMinRun = null;
+            OutStats statsForMinRun = null;
 
             do
             {
                 //Split ets to groups with the sum count on the sheet <= Constants.ETS_ON_SHEET
                 //and build temporary stats list
-                Zakaz zakazForMinRun = GetStatsForRun(_ets, _ets.MinRun + runIncrement).Ets;
+                statsForMinRun = GetStatsForRun(_ets, _ets.MinRun + runIncrement);
+                //For now statsForMinRun are not valid, but we don't bother, 
+                //because we would split ets later
+                zakazForMinRun = statsForMinRun.Ets;
+
                 StatsList tmpResult = new StatsList();
                 Zakaz part1;
                 Zakaz part2;
@@ -365,10 +372,23 @@ namespace Et075.Model
                         count += et.CountOnSheet;
                     }//foreach
                     //Part1 is valid, as far as previous if-expression is true
-                    tmpResult.Add(DecreaseRun(part1, part1.MinRun + runIncrement));
+                    OutStats os = GetStatsForRun(part1, part1.MinRun + runIncrement);
+                    if (!os.IsValid)
+                    {
+                        if (TheBestResult != null)
+                            return TheBestResult;
+                        else
+                            throw new Exception("Invalid Algorithm!");
+                    }
+                    tmpResult.Add(os);
                     //For second group recalculating stats with its MinRun
                     if (part2.Count > 0)
-                        zakazForMinRun = GetStatsForRun(part2, part2.MinRun + runIncrement).Ets;
+                    {
+                        statsForMinRun = GetStatsForRun(part2, part2.MinRun + runIncrement);
+                        //For now statsForMinRun are not valid, but we don't bother, 
+                        //because we would split part2 in the next loop
+                        zakazForMinRun = statsForMinRun.Ets;
+                    }
                 } while (part2.Count > 0);
 
                 //Select the best result as the final result returned
@@ -383,7 +403,7 @@ namespace Et075.Model
         }//end:SplitFromMinToMax
 
         /// <summary>
-        /// Determines minimum run foe given Zakaz,
+        /// Determines minimum run for given Zakaz,
         /// which produces valid OutStats
         /// </summary>
         /// <param name="ets">Given zakaz remains immutable</param>
@@ -401,8 +421,6 @@ namespace Et075.Model
             return run;
         }//end:GetMinValidRun
 
-        #endregion//CompletedMethods
-
         /// <summary>
         /// Sorts given ets, splits them into two groups 
         /// and optimizes these groups via rebalancing them
@@ -415,55 +433,42 @@ namespace Et075.Model
             {
                 throw new ArgumentOutOfRangeException();
             }
-           
+
             //Make given ets immutable
             Zakaz _ets = new Zakaz(ets);
             StatsList result = new StatsList();
 
             _ets.Sort(new CompareEtsByRunMinToMax());
 
-                //When we have _ets less than for two sheets,
-                //split them into two parts
-                //Take the first ETS_ON_SHEET ets to the first part
-                Zakaz part1 = new Zakaz(_ets.GetRange(0, Constants.ETS_ON_SHEET));
-                //Take all remained ets to the second part
-                Zakaz part2 = new Zakaz(_ets.GetRange(Constants.ETS_ON_SHEET, 
-                                                      _ets.Count - 1 - Constants.ETS_ON_SHEET));
-                //Calculate stats for both parts
-                result.AddRange(PackIntoSheet(part1));
-                result.AddRange(PackIntoSheet(part2));
+            //When we have _ets less than for two sheets,
+            //split them into two parts
+            //Take the first ETS_ON_SHEET ets to the first part
+            Zakaz part1 = new Zakaz(_ets.GetRange(0, Constants.ETS_ON_SHEET));
+            //Take all remained ets to the second part
+            Zakaz part2 = new Zakaz(_ets.GetRange(Constants.ETS_ON_SHEET,
+                                                  _ets.Count - 1 - Constants.ETS_ON_SHEET));
+            //Calculate stats for both parts
+            result.Add(GetStatsForRun(part1, GetMinValidRun(part1)));
+            result.Add(GetStatsForRun(part2, GetMinValidRun(part2)));
 
-                //Try to rebalance Part1 and Part2 to obtain the best stats
-                StatsList tmpResult;
-                while (part2.Count < Constants.ETS_ON_SHEET)
-                {
-                    part2.Add(part1[part1.Count - 1]);
-                    part1.RemoveAt(part1.Count - 1);
-                    tmpResult = new StatsList();
-                    tmpResult.AddRange(PackIntoSheet(part1));
-                    tmpResult.AddRange(PackIntoSheet(part2));
-                    if (tmpResult < result)
-                        result = tmpResult;
-                }//while
-
-            //"Something is rotten in the state of Denmark."
-            if (_ets.Count > Constants.ETS_ON_SHEET * 2)
+            //Try to rebalance Part1 and Part2 to obtain the best stats
+            StatsList tmpResult;
+            while (part2.Count < Constants.ETS_ON_SHEET)
             {
-                List<Zakaz> parts = new List<Zakaz>();
-                for (int i = 0; i < _ets.Count; i += Constants.ETS_ON_SHEET)
-                {
-                    if (i + Constants.ETS_ON_SHEET < _ets.Count)
-                        parts.Add(new Zakaz(_ets.GetRange(i, Constants.ETS_ON_SHEET)));
-                    else
-                        parts.Add(new Zakaz(_ets.GetRange(i, _ets.Count - 1 - i)));
-
-                }//for
-                foreach (Zakaz part in parts)
-                    result.AddRange(PackIntoSheet(part));
-            }//if
+                part2.Add(part1[part1.Count - 1]);
+                part1.RemoveAt(part1.Count - 1);
+                tmpResult = new StatsList();
+                tmpResult.Add(GetStatsForRun(part1, GetMinValidRun(part1)));
+                tmpResult.Add(GetStatsForRun(part2, GetMinValidRun(part2)));
+                if (tmpResult < result)
+                    result = tmpResult;
+            }//while
 
             return result;
         }//end:PackIntoSheet
+
+        #endregion//CompletedMethods
+
 
         /// <summary>
         /// Splits given ets to groups based on GCD.
@@ -515,54 +520,6 @@ namespace Et075.Model
                 result.Add(garbage);
             return result;
         }//end:SplitByGcdToGroups
-
-
-        protected static StatsList RecursiveTreeAnalizer(List<Zakaz> parts)
-        {
-            StatsList result = new StatsList();
-            foreach (Zakaz part in parts)
-                result.AddRange(PackIntoSheet(part));
-
-            for (int i = parts.Count - 1; i >= 0; i--)
-            {
-                if (i == 0)
-                    return result;
-                if (parts[i].Count < Constants.ETS_ON_SHEET)
-                {
-                    parts[i].Add(parts[i - 1][parts[i - 1].Count - 1]);
-                    parts[i].Sort(new CompareEtsByRunMinToMax());
-                    parts[i - 1].RemoveAt(parts[i - 1].Count - 1);
-                    StatsList result2 = RecursiveTreeAnalizer(parts);
-                    if (result < result2)
-                        result = result2;
-                }//if
-            }//for
-            return result;
-        }
-
-        private static StatsList ImproveStats(StatsList sl)
-        {
-            throw new NotImplementedException();
-            /*
-            StatsList result = new StatsList();
-
-            IEnumerable<IGrouping<bool, OutStats>> test =
-                from s in sl
-                group s by (s.EtsOnSheetCount == Constants.ETS_ON_SHEET)
-                    into gs
-                    where gs.Key == false
-                    select gs;
-            if (test.Count() == 0
-                || (test.Count() > 0 && test.First().Count() < 2))
-            {
-                return sl;
-            }
-            var el = from g in test.First() orderby g.Run descending select g;
-
-            return result;
-            */
-        }//end:ImproveStats
-
 
         #endregion//ServiceMethods
 

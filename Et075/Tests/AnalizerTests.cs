@@ -80,12 +80,10 @@ namespace Et075.Tests
 
             StatsList results = (Analizer.FirstPass(ets));
             StatsList results2 = (Analizer.SplitByGcd(ets));
-            StatsList results3 = (Analizer.PackIntoSheet(ets));
-
+            
             if (results > results2)
                 results = results2;
-            if (results > results3)
-                results = results3;
+
 
             foreach (var r in results)
             {
