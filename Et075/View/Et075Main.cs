@@ -18,16 +18,20 @@ namespace Et075.View
         public MainForm()
         {
             InitializeComponent();
+
+            //Setup initial window size
             int wndWidth = (int)(System.Windows.SystemParameters.FullPrimaryScreenWidth
                 - System.Windows.SystemParameters.FullPrimaryScreenWidth / 3);
             int wndHeight = (int)(System.Windows.SystemParameters.FullPrimaryScreenHeight
                 - System.Windows.SystemParameters.FullPrimaryScreenHeight / 6);
             this.ClientSize = new Size(wndWidth, wndHeight);
 
+            //Setup printing subsystem
             foreach (var item in PrintingProvider.SystemPrintersNamesList)
                 printersComboBox.Items.Add(item);
             printersComboBox.SelectedItem = PrintingProvider.DefaultPrinterName;
 
+            //Setup DataGrid
             dataGridView.Columns["id"].ValueType = typeof(int);
             dataGridView.Columns["run"].ValueType = typeof(int);
             dataGridView.Columns["name"].ValueType = typeof(string);
@@ -71,7 +75,6 @@ namespace Et075.View
                 return;
             }
             richTextBox.PrintRichTextContents(printersComboBox.Text);
-
         }//end:printButton_Click
 
         /// <summary>
@@ -91,9 +94,8 @@ namespace Et075.View
             //Analize data
             Dictionary<String, StatsList> results = new Dictionary<String, StatsList>();
             results.Add("SplitFromMinToMax", Analizer.FirstPass(z));
-            //results.Add("PackIntoSheet", Analizer.PackIntoSheet(z));
-            //results.Add("SplitByGcd", Analizer.SplitByGcd(z));
-            //results.Add("FindBestRunWithShifting", Analizer.FindBestRunWithShifting(z));
+            results.Add("SplitByGcd", Analizer.SplitByGcd(z));
+            results.Add("FindBestRunWithShifting", Analizer.FindBestRunWithShifting(z));
 
             //Setup initial values and text styles 
             Font titleFont = new Font("Calibri", 10, FontStyle.Bold);

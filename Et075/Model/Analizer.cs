@@ -8,8 +8,6 @@ namespace Et075.Model
     {
         #region PublicMethods
 
-        #region CompletedMethods
-
         /// <summary>
         /// Tries to process provided list of ets simply aligning them on the single sheet.
         /// If it fails, Split would be called.
@@ -36,22 +34,14 @@ namespace Et075.Model
                 return result;
             }
 
-            // If etsOnSheetSum > Constants.ETS_ON_SHEET, select the best stats from 2 options below
-            // At first. Obtain the stats for minimum acceptable run
-            result = new StatsList() { GetStatsForRun(_ets, GetMinValidRun(_ets)) };
-            // At second. We try to split ets.
-            StatsList splitStats = SplitFromMinToMax(_ets);
-            
-            //Check which stats are the best and return them
-            if (splitStats < result)
-            {
-                result = splitStats;
-            }
+            result = new StatsList() { DecreaseRun(_ets, GetMinValidRun(_ets)) };
+
             return result;
         }//end:FirstPass
 
-        #endregion//CompletedMethods
-
+        /// <summary>
+        /// Splits ets list based on 'MagicNumbers' and processes produced sublists
+        /// </summary>
         public static StatsList FindBestRunWithShifting(Zakaz ets)
         {
             //Given ets become immutable, because NormalizeAndSort() returns new object,
@@ -77,8 +67,14 @@ namespace Et075.Model
                     tmpEts = new Zakaz() { _ets[i] };
                 }
             }//end:for
-            if (tmpEts.Count > 0)
+
+            if (tmpEts.Count > 0 && tmpEts.Count <= Constants.ETS_ON_SHEET)
                 result.Add(FindBestRun(tmpEts));
+            else if (tmpEts.Count <= Constants.ETS_ON_SHEET * 2)
+                result.AddRange(TwoPartsRebalancer(tmpEts));
+            else if (tmpEts.Count > Constants.ETS_ON_SHEET * 2)
+                result.AddRange(SplitFromMinToMax(tmpEts));
+
             return result;
         }//end:FindBestRunWithShifting
 
@@ -89,11 +85,12 @@ namespace Et075.Model
         public static StatsList SplitByGcd(Zakaz ets)
         {
             //ets.NormalizeAndSort();
-            ets.Sort(new CompareEtsByRunMinToMax());
+            Zakaz _ets = new Zakaz(ets);
+            _ets.Sort(new CompareEtsByRunMinToMax());
 
             List<Zakaz> groups = new List<Zakaz>();
             Zakaz garbageGroup = new Zakaz();
-            foreach (Zakaz group in SplitByGcdToGroups(ets))
+            foreach (Zakaz group in SplitByGcdToGroups(_ets))
             {
                 //Sort ets of current group from max to min run
                 group.Sort(new CompareEtsByRunMaxToMin());
@@ -105,7 +102,7 @@ namespace Et075.Model
                     group.RemoveRange(0, Constants.ETS_ON_SHEET);
                 }
 
-                //All groups of one et merged to one 'garbage' group
+                //All groups of one et are merged into one 'garbage' group
                 if (group.Count < 2)
                     garbageGroup.AddRange(group);
                 else
@@ -120,91 +117,10 @@ namespace Et075.Model
             return result;
         }//end:SplitByGcd
 
-        [Obsolete("Use TwoPartsRebalancer instead.")]
-        public static StatsList PackIntoSheet(Zakaz ets)
-        {
-            if (ets.Count <= Constants.ETS_ON_SHEET)
-            {
-                return FirstPass(ets);
-            }
-
-            //Make given ets immutable
-            Zakaz _ets = new Zakaz(ets);
-            StatsList result = new StatsList();
-
-            _ets.Sort(new CompareEtsByRunMinToMax());
-
-            //Try to fill the sheets completely
-            if (_ets.Count % Constants.ETS_ON_SHEET == 0)
-            {
-                Zakaz tmpEts = new Zakaz();
-                //Split _ets to fill the sheets completely
-                for (int i = 1; i <= _ets.Count; i++)
-                {
-                    if (i == Constants.ETS_ON_SHEET
-                        || (i > Constants.ETS_ON_SHEET
-                            && i % Constants.ETS_ON_SHEET == 0))
-                    {
-                        result.AddRange(PackIntoSheet(tmpEts));
-                        tmpEts = new Zakaz();
-                    }
-                    else
-                        tmpEts.Add(_ets[i - 1]);
-                }//for
-            }//if
-
-            if (_ets.Count < Constants.ETS_ON_SHEET * 2)
-            {
-                //When we have _ets less than for two sheets,
-                //split them into two parts
-                //Take the first ETS_ON_SHEET ets to the first part
-                Zakaz part1 = new Zakaz(_ets.GetRange(0, Constants.ETS_ON_SHEET));
-                //Take all remained ets to the second part
-                Zakaz part2 = new Zakaz(_ets.GetRange(Constants.ETS_ON_SHEET,
-                                                      _ets.Count - 1 - Constants.ETS_ON_SHEET));
-                //Calculate stats for both parts
-                result.AddRange(PackIntoSheet(part1));
-                result.AddRange(PackIntoSheet(part2));
-
-                //Try to rebalance Part1 and Part2 to obtain the best stats
-                StatsList tmpResult;
-                while (part2.Count < Constants.ETS_ON_SHEET)
-                {
-                    part2.Add(part1[part1.Count - 1]);
-                    part1.RemoveAt(part1.Count - 1);
-                    tmpResult = new StatsList();
-                    tmpResult.AddRange(PackIntoSheet(part1));
-                    tmpResult.AddRange(PackIntoSheet(part2));
-                    if (tmpResult < result)
-                        result = tmpResult;
-                }//while
-            }//if
-
-            //"Something is rotten in the state of Denmark."
-            if (_ets.Count > Constants.ETS_ON_SHEET * 2)
-            {
-                List<Zakaz> parts = new List<Zakaz>();
-                for (int i = 0; i < _ets.Count; i += Constants.ETS_ON_SHEET)
-                {
-                    if (i + Constants.ETS_ON_SHEET < _ets.Count)
-                        parts.Add(new Zakaz(_ets.GetRange(i, Constants.ETS_ON_SHEET)));
-                    else
-                        parts.Add(new Zakaz(_ets.GetRange(i, _ets.Count - 1 - i)));
-
-                }//for
-                foreach (Zakaz part in parts)
-                    result.AddRange(PackIntoSheet(part));
-            }//if
-
-            return result;
-        }//end:PackIntoSheet
-
         #endregion//PublicMethods
 
 
         #region ServiceMethods
-
-        #region CompletedMethods
 
         /// <summary>
         /// Returns the greatest common divisor of a and b
@@ -467,9 +383,6 @@ namespace Et075.Model
             return result;
         }//end:PackIntoSheet
 
-        #endregion//CompletedMethods
-
-
         /// <summary>
         /// Splits given ets to groups based on GCD.
         /// </summary>
@@ -492,30 +405,34 @@ namespace Et075.Model
             List<Zakaz> result = new List<Zakaz>();
             Zakaz garbage = new Zakaz();
             bool present; //Indicates if current et is already present in the result
+
             //Take every group from gcdGroups sorted by number of ets from max to min
             foreach (Zakaz group in (from z in gcdGroups orderby z.Count descending select z))
             {
                 present = false;
                 foreach (Etyketka et in group)
-                {
-                    bool toGarbage = true;
                     foreach (Zakaz resultGroup in result)
-                    {
                         //If current et is already in the result, then drop this group
                         if (resultGroup.Contains(et))
                         {
                             present = true;
-                            toGarbage = false;
+                            goto FIN; //Exit from inner and outer for-loops
                         }
-                    }
-                    if (present && toGarbage && !garbage.Contains(et))
-                        garbage.Add(et);
-                }
-                //If all ets of current group are not present in the result,
-                //add this group to the result
+            FIN:
                 if (!present)
+                {
+                    //If all ets of current group are not present in the result,
+                    //add this group to the result
                     result.Add(group);
-            }
+                }
+                else
+                {
+                    //Add current group to garbage
+                    foreach (Etyketka et in group)
+                        if (!garbage.Contains(et))
+                            garbage.Add(et);
+                }//else
+            }//foreach
             if (garbage.Count > 0)
                 result.Add(garbage);
             return result;
